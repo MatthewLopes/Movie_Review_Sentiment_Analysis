@@ -81,7 +81,11 @@ tmpfit = glmnet(x = dtm_all_data,
 
 myvocab = colnames(dtm_all_data)[which(tmpfit$beta[, 36] != 0)]
 
-
+write.table(myvocab, file = "myvocab.txt",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = FALSE,
+            sep = "\n")
 
 ```
 
