@@ -1,8 +1,14 @@
 ---
-title: "project_3"
+title: "Project_3"
 output: html_document
-date: "2022-11-11"
+date: "2022-11-22"
 ---
+
+### Matthew Lopes: mlopes2
+### Jack Kovach : jkovach2
+### UIN Used: Kovach - 662871852
+
+####Import Libraries
 
 ```{r}
 library(text2vec)
@@ -11,12 +17,18 @@ library(pROC)
 library(slam)
 library(dplyr)
 ```
+### Steps to Build the Vocabulary File
 
 ```{r}
+
+# Import alldata.tsv file for training and move punctuation out of the review columns
 all_data = read.table("alldata.tsv",
                    stringsAsFactors = FALSE,
                    header = TRUE)
+
 all_data$review = gsub('<.*?>', ' ', all_data$review)
+
+# Create a list of stop words to feed into the create_vocabulary function of text2vec library
 
 stop_words = c("i", "me", "my", "myself", 
                "we", "our", "ours", "ourselves", 
@@ -26,20 +38,36 @@ stop_words = c("i", "me", "my", "myself",
                "is", "was", "are", "were", 
                "him", "himself", "has", "have", 
                "it", "its", "the", "us")
+
+# Tokenize the data to lowercase and use word_tokenizer function to split the review column into tokens
+
 it_all_data = itoken(all_data$review,
                   preprocessor = tolower, 
                   tokenizer = word_tokenizer)
+
+# Create a temporary vocabulary from text2vec using ngram(1L,4L) and stop words
+
 tmp.vocab = create_vocabulary(it_all_data, 
                               stopwords = stop_words, 
                               ngram = c(1L,4L))
+
+# We the prune this vocabulary for terms that appear a minimum of 10 times and have a proportion of occurrences between 0.001 and 0.5 for all of the tokenized reviews from alldata.tsv
+
 tmp.vocab = prune_vocabulary(tmp.vocab, term_count_min = 10,
                              doc_proportion_max = 0.5,
                              doc_proportion_min = 0.001)
+
+# Then, with this vocabulary we create the dtm_train using the vocabulary as the vocab_vectorizer.
+
 dtm_all_data  = create_dtm(it_all_data, vocab_vectorizer(tmp.vocab))
 
 v.size = dim(dtm_all_data)[2]
 
+# Get the review 0/1 sentiment result
+
 y_all = all_data$sentiment
+
+# Begin the 2-Sample T-Test by calculating the means and variances of the entries where the review value is equal to 1 and separately for the entries where the review value is equal to 0 using R slam package
 
 summ = matrix(0, nrow=v.size, ncol=4)
 summ[,1] = colapply_simple_triplet_matrix(
@@ -51,6 +79,8 @@ summ[,3] = colapply_simple_triplet_matrix(
 summ[,4] = colapply_simple_triplet_matrix(
   as.simple_triplet_matrix(dtm_all_data[y_all==0, ]), var)
 
+# Use the calculated summ matrix columns to get the T-Statistic
+
 n1 = sum(y_all); 
 n = length(y_all)
 n0 = n - n1
@@ -58,10 +88,17 @@ n0 = n - n1
 myp = (summ[,1] - summ[,3])/
   sqrt(summ[,2]/n1 + summ[,4]/n0)
 
+# Create a word list using al the column names
+
 words = colnames(dtm_all_data)
+
+# Pick top 2000 words by getting the top absolute values of T-Statistics collected for the most influential words. Pick the positive words and negative words among those reviews
+
 id = order(abs(myp), decreasing=TRUE)[1:2000]
 pos.list = words[id[myp[id]>0]]
 neg.list = words[id[myp[id]<0]]
+
+# Check which words never appeared in positive reviews and which words never appeared in negative reviews and created a union from our list of words for these reviews
 
 id1 = which(summ[, 2] == 0) # same as: which(summ[id0, 1] != 0)
 id0 = which(summ[, 4] == 0) #same as: which(summ[id1, 3] != 0)
@@ -70,8 +107,7 @@ myvocab_start = union(id,id1)
 myvocab_start = union(myvocab_start,id0)
 myvocab_start = words[myvocab_start]
 
-vectorizer = vocab_vectorizer(create_vocabulary(myvocab_start, 
-                                                  ngram = c(1L, 2L)))
+# Run a lasso regression on dtm_all_data an sentiment
 
 set.seed(1852) 
 tmpfit = glmnet(x = dtm_all_data,
@@ -79,7 +115,11 @@ tmpfit = glmnet(x = dtm_all_data,
                  alpha = 1,
                  family='binomial')
 
+# Pick out top values with with a vocab size of less than 1000
+
 myvocab = colnames(dtm_all_data)[which(tmpfit$beta[, 36] != 0)]
+
+# Write output to myvocab.txt file
 
 write.table(myvocab, file = "myvocab.txt",
             quote = FALSE,
@@ -88,10 +128,13 @@ write.table(myvocab, file = "myvocab.txt",
             sep = "\n")
 
 ```
-
+### Initial Test Code Below Before creation of mymain.R document
+#### We used a for loop to run all folds in a quick and automated manner prior to final testing using the mymain.R function and evalulation script.
 
 ```{r}
-vectorizer = vocab_vectorizer(create_vocabulary(myvocab,
+myvocab_in <- scan(file = "myvocab.txt", what = character())
+
+vectorizer = vocab_vectorizer(create_vocabulary(myvocab_in,
                                                 ngram = c(1L, 2L)))
 
 for (j in 1:5){
